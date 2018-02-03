@@ -54,20 +54,46 @@ impl NewSessionCmd {
         self
     }
 
-    /// Extend a capability requirement with a new object.
+    /// Extend a capability requirement with attributes from another object.
     ///
     /// Extending a capability that does not exist, or attempting to extend non objects will have
     /// the same effect as calling [always_match()](#method.always_match).
     pub fn extend_always_match(&mut self, name: &str, capability: JsonValue) {
-        if let JsonValue::Object(capability) = capability {
-            if let Some(&mut JsonValue::Object(ref mut map)) = self.capabilities.alwaysMatch.get_mut(name) {
-                map.extend(capability);
+        Self::merge_obj(self.capabilities.alwaysMatch.entry(name.to_string()).or_insert(JsonValue::Null), capability);
+    }
+
+    /// Merge two json objects.
+    ///
+    /// If the new value is not an object it replaces the previous values.
+    ///
+    /// Based on https://github.com/serde-rs/json/issues/377#issuecomment-341490464
+    /// minus the clones.
+    fn merge_obj(a: &mut JsonValue, b: JsonValue) {
+        if let Some(ref mut a) = a.as_object_mut() {
+            if let JsonValue::Object(b) = b {
+                for (k, v) in b.into_iter() {
+                    Self::merge_obj(a.entry(k.clone()).or_insert(JsonValue::Null), v);
+                }
                 return;
             }
-            self.capabilities.alwaysMatch.insert(name.to_string(), JsonValue::Object(capability));
-        } else {
-            self.capabilities.alwaysMatch.insert(name.to_string(), capability);
         }
+        *a = b;
+    }
+
+    /// Extends the `alwaysMatch` capabilities object with attributes from another object.
+    ///
+    /// The provided value MUST be an object.
+    pub fn extend_always_match2(&mut self, new_attrs: JsonValue) -> &mut Self {
+        if let JsonValue::Object(map) = new_attrs {
+            for (k, v) in map.into_iter() {
+                Self::merge_obj(self.capabilities.alwaysMatch
+                    .entry(k)
+                    .or_insert(JsonValue::Null), v);
+            }
+        } else {
+            // ERROR: input is not an object
+        }
+        self
     }
 }
 
@@ -247,6 +273,21 @@ mod tests {
         assert_eq!(session.capabilities.alwaysMatch.get("cap").unwrap(), &json!({"a": false, "b": false}));
     }
     #[test]
+    fn capability_extend_recurses() {
+        let mut session = NewSessionCmd::default();
+        session.always_match("cap", Some(json!({"a1": {"b1": {"c1": true}}})));
+
+        session.extend_always_match("cap", json!({"a1": {"b2": true, "b1": { "c2": false}}}));
+        assert_eq!(session.capabilities.alwaysMatch.get("cap").unwrap(), 
+                   &json!({"a1": {
+                        "b2": true,
+                        "b1": {
+                            "c2": false,
+                            "c1": true,
+                        }
+                       }}));
+    }
+    #[test]
     fn capability_extend_replaces_non_obj() {
         let mut session = NewSessionCmd::default();
         session.always_match("cap", Some(json!("value")));
@@ -255,6 +296,15 @@ mod tests {
         session.extend_always_match("cap", json!({"a": false}));
         assert_eq!(session.capabilities.alwaysMatch.get("cap").unwrap(), &json!({"a": false}));
     }
+
+    #[test]
+    fn capability_extend_replaces_null() {
+        let mut session = NewSessionCmd::default();
+        session.always_match("cap", Some(json!(null)));
+        session.extend_always_match("cap", json!({"a": false}));
+        assert_eq!(session.capabilities.alwaysMatch.get("cap").unwrap(), &json!({"a": false}));
+    }
+
     #[test]
     fn capability_extend_replaces_obj_with_non_obj() {
         let mut session = NewSessionCmd::default();
