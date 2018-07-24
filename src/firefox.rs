@@ -67,7 +67,7 @@ impl GeckoDriverBuilder {
 
 /// A geckodriver process
 pub struct GeckoDriver {
-    child: Child,
+    pub child: Child,
     url: String,
     kill_on_drop: bool,
 }

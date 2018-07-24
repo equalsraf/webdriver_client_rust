@@ -58,7 +58,7 @@ impl ChromeDriverBuilder {
 
 /// A chromedriver process
 pub struct ChromeDriver {
-    child: Child,
+    pub child: Child,
     url: String,
     kill_on_drop: bool,
 }
