@@ -37,6 +37,7 @@ use std::convert::From;
 use std::fmt::{self, Debug};
 use std::io::Read;
 use std::io;
+use std::rc::Rc;
 
 // --------
 
@@ -88,6 +89,13 @@ pub trait Driver {
     fn url(&self) -> &str;
 
     /// Start a session for this driver
+    fn session(self, params: &NewSessionCmd) -> Result<DriverSession, Error> where Self : Sized + 'static {
+        DriverSession::create_session(Box::new(self), params)
+    }
+}
+
+impl<T> Driver for Rc<T> where T: Driver {
+    fn url(&self) -> &str { T::url(self) }
     fn session(self, params: &NewSessionCmd) -> Result<DriverSession, Error> where Self : Sized + 'static {
         DriverSession::create_session(Box::new(self), params)
     }
