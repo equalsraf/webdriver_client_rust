@@ -170,6 +170,7 @@ impl HttpClient {
 ///
 /// By default the session is removed on `Drop`
 pub struct DriverSession {
+    #[allow(dead_code)]
     driver: Box<Driver>,
     client: HttpClient,
     session_id: String,
